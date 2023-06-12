@@ -23,6 +23,11 @@ async def start(client, message):
 # Add an unzip command
 @bot.on_message(filters=pyrogram.filters.command("unzip"))
 async def unzip(client, message):
+    # Check if the user sent a file
+    if not file:
+        await message.reply("Please send a file to unzip.")
+        return
+
     # Get the file from the user
     file = await message.reply("Send me the file to unzip.")
 
