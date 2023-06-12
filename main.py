@@ -1,88 +1,58 @@
 import os
-import zipfile
-import tempfile
-import asyncio
-from pyrogram import Client, filters
+import time
+import pyrogram
 
-# Replace with your Telegram API credentials
+# Set your API ID, API hash, and bot token
 API_ID = 27135205
-API_HASH = '0996dca78ada710bc31f31b00bb09811'
-BOT_TOKEN = '5752952621:AAGO61IiffzN23YuXyv71fbDztA_ubGM6qo'
+API_HASH = "0996dca78ada710bc31f31b00bb09811"
+BOT_TOKEN = "5752952621:AAGO61IiffzN23YuXyv71fbDztA_ubGM6qo"
 
-app = Client('unzip_bot', api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# Create a bot
+bot = pyrogram.Client(
+    "UnzipBot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN,
+)
 
+# Add a start command
+@bot.on_message(filters=pyrogram.filters.command("start"))
+async def start(client, message):
+    await message.reply("Welcome to the Unzip Bot! Use the /unzip command to unzip files.")
 
-# Start command handler
-@app.on_message(filters.command("start"))
-def start_command(client, message):
-    client.send_message(
-        chat_id=message.chat.id,
-        text="Welcome to the Unzip Bot! Send a zip file and reply to it with /unzip command to unzip it.",
-    )
+# Add an unzip command
+@bot.on_message(filters=pyrogram.filters.command("unzip"))
+async def unzip(client, message):
+    # Get the file from the user
+    file = await message.reply("Send me the file to unzip.")
 
-# Unzip command handler
-@app.on_message(filters.command("unzip") & filters.reply)
-def unzip_command(client, message):
-    reply_message = message.reply_to_message
+    # Check if the file is a zip file
+    if file.file_type != "zip":
+        await message.reply("That's not a zip file!")
+        return
 
-    if reply_message.document and reply_message.document.mime_type == "application/zip":
-        # Download the zip file
-        file_path = client.download_media(
-            message=reply_message,
-            file_name="temp.zip"
-        )
+    # Download the file
+    path = await file.download()
 
-        # Unzip the file
-        unzip_directory = os.path.splitext(file_path)[0]
-        os.makedirs(unzip_directory, exist_ok=True)
-        os.system(f"unzip -qq {file_path} -d {unzip_directory}")
+    # Unzip the file
+    with zipfile.ZipFile(path) as zip_file:
+        for file in zip_file.infolist():
+            # Check if the file is an image or video
+            if file.filename.endswith(".jpg") or file.filename.endswith(".jpeg") or file.filename.endswith(".png") or file.filename.endswith(".mp4"):
+                # Get the file content
+                content = await zip_file.read(file.filename)
 
-        # Get the contents of the unzipped directory
-        contents = os.listdir(unzip_directory)
+                # Send the file content to the user
+                await message.reply_photo(content, caption=file.filename)
+            else:
+                # Get the file content
+                content = await zip_file.read(file.filename)
 
-        # Send the contents as a reply
-        for item in contents:
-            item_path = os.path.join(unzip_directory, item)
-            if os.path.isfile(item_path):
-                # Check if it's an image file
-                if item.endswith((".jpg", ".jpeg", ".png")):
-                    # Compress the image
-                    compressed_image = compress_image(item_path)
+                # Send the file content to the user
+                await message.reply_document(content, caption=file.filename)
 
-                    # Send the compressed image
-                    client.send_photo(
-                        chat_id=message.chat.id,
-                        photo=compressed_image
-                    )
-                # Check if it's a video file
-                elif item.endswith((".mp4", ".mkv")):
-                    # Send the video
-                    client.send_video(
-                        chat_id=message.chat.id,
-                        video=item_path
-                    )
-                else:
-                    # Send other files as documents
-                    client.send_document(
-                        chat_id=message.chat.id,
-                        document=item_path
-                    )
-
-        # Cleanup: remove the zip file and the unzipped directory
-        os.remove(file_path)
-        os.system(f"rm -rf {unzip_directory}")
-    else:
-        client.send_message(
-            chat_id=message.chat.id,
-            text="Please reply to a zip file to unzip it."
-        )
-
-# Helper function to compress images
-def compress_image(image_path):
-    # Your image compression logic goes here
-    # You can use libraries like PIL or OpenCV to compress the images
-    # Return the path to the compressed image file
-    return image_path
+    # Delete the file
+    os.remove(path)
 
 # Run the bot
-asyncio.run(app.run())
+bot.run()
