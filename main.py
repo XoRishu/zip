@@ -24,7 +24,7 @@ async def start(client, message):
 @bot.on_message(filters=pyrogram.filters.command("unzip"))
 async def unzip(client, message):
     # Check if the user sent a file
-    if not file:
+    if not message.document:
         await message.reply("Please send a file to unzip.")
         return
 
@@ -41,20 +41,20 @@ async def unzip(client, message):
 
     # Unzip the file
     with zipfile.ZipFile(path) as zip_file:
-        for file in zip_file.infolist():
+        for file_info in zip_file.infolist():
             # Check if the file is an image or video
-            if file.filename.endswith(".jpg") or file.filename.endswith(".jpeg") or file.filename.endswith(".png") or file.filename.endswith(".mp4"):
+            if file_info.filename.endswith((".jpg", ".jpeg", ".png", ".mp4")):
                 # Get the file content
-                content = await zip_file.read(file.filename)
+                content = await zip_file.read(file_info.filename)
 
                 # Send the file content to the user
-                await message.reply_photo(content, caption=file.filename)
+                await message.reply_photo(content, caption=file_info.filename)
             else:
                 # Get the file content
-                content = await zip_file.read(file.filename)
+                content = await zip_file.read(file_info.filename)
 
                 # Send the file content to the user
-                await message.reply_document(content, caption=file.filename)
+                await message.reply_document(content, caption=file_info.filename)
 
     # Delete the file
     os.remove(path)
