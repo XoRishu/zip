@@ -27,7 +27,7 @@ async def unzip(client, message):
     file = await message.reply("Send me the file to unzip.")
 
     # Check if the file is a zip file
-    if file.file_type != "zip":
+    if file.document.file_type != "zip":
         await message.reply("That's not a zip file!")
         return
 
