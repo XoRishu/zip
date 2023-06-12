@@ -1,101 +1,55 @@
 import os
-import shutil
 import zipfile
-from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import tempfile
+from pyrogram import Client, filters
 
-# Handler for the /start command
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Welcome to the Unzip Bot! Send a zip file to unpack it.")
+# Replace with your Telegram API credentials
+API_ID = 27135205
+API_HASH = '0996dca78ada710bc31f31b00bb09811'
+BOT_TOKEN = '5752952621:AAGO61IiffzN23YuXyv71fbDztA_ubGM6qo'
 
-# Handler for when a zip file is sent
-def unzip(update: Update, context: CallbackContext):
-    # Check if the message has a document
-    if update.message.document:
-        file = update.message.document
-        # Check if the document is a zip file
-        if file.file_name.endswith('.zip'):
-            # Download the zip file
-            file_id = file.file_id
-            new_file = context.bot.get_file(file_id)
-            new_file.download('temp.zip')
-            
-            # Unzip the file
-            with zipfile.ZipFile('temp.zip', 'r') as zip_ref:
-                zip_ref.extractall('unzipped')
-            
-            # Remove the temporary zip file
-            os.remove('temp.zip')
-            
-            # Get the list of files in the unzipped folder
-            files = os# Handler for when a zip file is sent
-def unzip(update: Update, context: CallbackContext):
-    # Check if the message has a document
-    if update.message.document:
-        file = update.message.document
-        # Check if the document is a zip file
-        if file.file_name.endswith('.zip'):
-            # Check the file size
-            if file.file_size <= 50 * 1024 * 1024:  # Adjust the size limit as needed (e.g., 50 MB)
-                # Download the zip file
-                file_id = file.file_id
-                new_file = context.bot.get_file(file_id)
-                new_file.download('temp.zip')
-                
-                # Unzip the file
-                with zipfile.ZipFile('temp.zip', 'r') as zip_ref:
-                    zip_ref.extractall('unzipped')
-                
-                # Remove the temporary zip file
-                os.remove('temp.zip')
-                
-                # Get the list of files in the unzipped folder
-                files = os.listdir('unzipped')
-                file_count = len(files)
-                
-                # Prepare the response
-                response_text = f"Unzipped {file.file_name}:\n"
-                response_text += f"Total files: {file_count}\n"
-                response_text += "Contents:"
-                
-                # Send the response
-                update.message.reply_text(response_text)
-                
-                # Send the contents as compressed images or videos
-                for file_name in files:
-                    file_path = os.path.join('unzipped', file_name)
-                    if file_name.lower().endswith(('.jpg', '.jpeg', '.png')):
-                        context.bot.send_photo(update.message.chat_id, photo=open(file_path, 'rb'))
+app = Client('unzip_bot', api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+
+
+@app.on_message(filters.command(['unzip']) & filters.reply)
+def unzip_command(client, message):
+    # Check if the replied message has a zip file
+    if message.reply_to_message.document and message.reply_to_message.document.file_name.endswith('.zip'):
+        zip_file = message.reply_to_message.download()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+                # Extract all files to the temporary directory
+                zip_ref.extractall(temp_dir)
+
+            for file_name in os.listdir(temp_dir):
+                file_path = os.path.join(temp_dir, file_name)
+
+                if os.path.isfile(file_path):
+                    # Compress image files to zip format
+                    if file_name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif')):
+                        temp_zip = tempfile.NamedTemporaryFile(suffix='.zip')
+                        with zipfile.ZipFile(temp_zip.name, 'w') as image_zip:
+                            image_zip.write(file_path, arcname=file_name)
+
+                        with open(temp_zip.name, 'rb') as f:
+                            client.send_document(message.chat.id, f, caption=file_name)
+
+                    # Convert video files to MP4 format
                     elif file_name.lower().endswith(('.mp4', '.avi', '.mkv')):
-                        context.bot.send_video(update.message.chat_id, video=open(file_path, 'rb'))
+                        temp_mp4 = tempfile.NamedTemporaryFile(suffix='.mp4')
+                        os.system(f'ffmpeg -i "{file_path}" -vcodec copy -acodec copy "{temp_mp4.name}"')
+
+                        with open(temp_mp4.name, 'rb') as f:
+                            client.send_video(message.chat.id, f, caption=file_name)
+
+                    # Stream other files directly
                     else:
-                        # Send other file types as documents
-                        context.bot.send_document(update.message.chat_id, document=open(file_path, 'rb'))
-                
-                # Remove the unzipped folder
-                shutil.rmtree('unzipped')
-            else:
-                update.message.reply_text("The zip file is too large. Please send a smaller file.")
-        else:
-            update.message.reply_text("The file is not a zip file. Please send a valid zip file.")
+                        with open(file_path, 'rb') as f:
+                            client.send_document(message.chat.id, f, caption=file_name)
 
-# Handler for any other message
-def unknown(update: Update, context: CallbackContext):
-    update.message.reply_text("Sorry, I don't understand that command.")
-    
-def main():
-    # Replace 'TOKEN' with your own Telegram bot token
-    updater = Updater('5752952621:AAGO61IiffzN23YuXyv71fbDztA_ubGM6qo', use_context=True)
-    dispatcher = updater.dispatcher
-    
-    # Add handlers for commands and messages
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(MessageHandler(Filters.document, unzip))
-    dispatcher.add_handler(MessageHandler(Filters.all, unknown))
-    
-    # Start the bot
-    updater.start_polling()
-    updater.idle()
+        # Remove the downloaded zip file
+        os.remove(zip_file)
 
-if __name__ == '__main__':
-    main()
+
+app.run()
