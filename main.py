@@ -1,6 +1,7 @@
 import os
 import zipfile
 import tempfile
+import asyncio
 from pyrogram import Client, filters
 
 # Replace with your Telegram API credentials
@@ -84,4 +85,4 @@ def compress_image(image_path):
     return image_path
 
 # Run the bot
-app.run()
+asyncio.run(app.run())
